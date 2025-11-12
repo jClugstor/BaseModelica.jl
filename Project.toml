@@ -11,7 +11,7 @@ ParserCombinator = "fae87a5f-d1ad-5cf0-8f61-c941e1580b46"
 [compat]
 Aqua = "0.8"
 MLStyle = "0.4.17"
-ModelingToolkit = "9"
+ModelingToolkit = "10"
 ParserCombinator = "2"
 SafeTestsets = "0.1"
 Test = "1.10"

@@ -130,7 +130,7 @@ function eval_AST(model::BaseModelicaModel)
     #vars,pars,eqs, init_eqs_dict
 
     defaults = merge(init_eqs_dict, parameter_val_map)
-    @named model = ODESystem(eqs, t, vars, pars; defaults)
+    @named model = System(eqs, t; defaults)
     structural_simplify(model)
 end
 
