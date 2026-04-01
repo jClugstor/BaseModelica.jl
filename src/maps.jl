@@ -95,6 +95,14 @@ function_map = Dict(
     # ── Array reduction functions (Spec 10.3.4) ──────────────────────────────
     :sum => x -> Base.sum(x...),
     :product => x -> Base.prod(x...),
+    :firstTrueIndex => x -> something(Base.findfirst(Base.identity, x[1]), 0),
+    # wrapAngle(u, positiveRange=false): wrap to [0,2π] if true, [-π,π] if false
+    :wrapAngle => x -> begin
+        u = x[1]
+        positiveRange = length(x) >= 2 ? Bool(x[2]) : false
+        y = Base.mod(u, 2π)
+        positiveRange ? y : ifelse(y > π, y - 2π, y)
+    end,
 
     # ── Matrix and vector algebra (Spec 10.3.5) ──────────────────────────────
     :transpose => x -> Base.transpose(x...),

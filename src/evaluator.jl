@@ -845,7 +845,7 @@ end
 
 function eval_AST(function_call::BaseModelicaFunctionCall)
     if function_call.func_name isa BaseModelicaComponentReference
-        function_name = Symbol(function_call.func_name.ref_list[1].name)
+        function_name = Symbol(function_call.func_name.ref_list[end].name)
     else
         function_name = Symbol(function_call.func_name.name)
     end
