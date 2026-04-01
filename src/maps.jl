@@ -35,6 +35,8 @@ function_map = Dict(
     :acos => x -> Base.acos(x...),
     :atan => x -> Base.atan(x...),
     :atan2 => x -> Base.atan(x[1], x[2]),
+    # atan3(u1, u2, y0): atan2 adjusted by 2π multiples to be closest to y0
+    :atan3 => x -> Base.atan(x[1], x[2]) + 2π * round((x[3] - Base.atan(x[1], x[2])) / (2π)),
 
     # Hyperbolic
     :sinh => x -> Base.sinh(x...),
