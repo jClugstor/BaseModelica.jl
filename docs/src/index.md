@@ -17,6 +17,8 @@ Pkg.add("BaseModelica")
 
 ```@docs
 parse_basemodelica
+parse_experiment_annotation
+create_odeproblem
 ```
 
 ## Contributing

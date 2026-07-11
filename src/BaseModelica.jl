@@ -12,24 +12,25 @@ include("antlr_parser.jl")
 include("evaluator.jl")
 
 """
-    parse_basemodelica(filename::String; parser::Symbol=:julia)::System
+    parse_basemodelica(filename::String; parser::Symbol = :antlr)::System
 
 Parses a BaseModelica .mo file into a ModelingToolkit System.
 
 ## Arguments
-- `filename::String`: Path to the .mo file to parse
-- `parser::Symbol=:julia`: Parser to use. Options:
-  - `:julia` - ParserCombinator parser (default)
-  - `:antlr` - ANTLR parser
+- `filename::String`: Path to the .mo file to parse.
+- `parser::Symbol`: Parser to use. Options:
+  - `:antlr` - ANTLR parser (default)
+  - `:julia` - ParserCombinator parser
+
+## Returns
+- A `ModelingToolkit.System` generated from the parsed BaseModelica model.
 
 ## Example
 
 ```julia
-# Use ANTLR parser (default)
 parse_basemodelica("testfiles/NewtonCoolingBase.bmo")
 parse_basemodelica("testfiles/NewtonCoolingBase.bmo", parser=:antlr)
-# Use ParserCombinator parser
-parse_basemodelica("testfiles/NewtonCoolingBase.bmo", parser = :julia)
+parse_basemodelica("testfiles/NewtonCoolingBase.bmo"; parser = :julia)
 ```
 """
 function parse_basemodelica(filename::String; parser::Symbol = :antlr)
@@ -46,14 +47,19 @@ end
 """
     parse_experiment_annotation(annotation::Union{BaseModelicaAnnotation, Nothing})
 
-Parse experiment annotation to extract simulation parameters.
-Returns a named tuple with StartTime, StopTime, Tolerance, and Interval, or nothing if no experiment annotation exists.
+Extract simulation settings from a BaseModelica experiment annotation.
+
+## Arguments
+- `annotation`: A parsed BaseModelica annotation, or `nothing`.
+
+## Returns
+- `nothing` when no experiment annotation is provided.
+- A named tuple with `StartTime`, `StopTime`, `Tolerance`, and `Interval` when settings are available.
 
 ## Example
 ```julia
 annotation = BaseModelicaAnnotation("annotation(experiment(StartTime = 0, StopTime = 2.0, Tolerance = 1e-06, Interval = 0.004))")
 params = parse_experiment_annotation(annotation)
-# Returns: (StartTime = 0.0, StopTime = 2.0, Tolerance = 1e-06, Interval = 0.004)
 ```
 """
 function parse_experiment_annotation(annotation::Union{BaseModelicaAnnotation, Nothing})
@@ -130,19 +136,19 @@ Parse a BaseModelica file and create an ODEProblem with experiment settings from
 If an experiment annotation is present, StartTime, StopTime, and Tolerance are automatically applied.
 
 ## Arguments
-- `filename::String`: Path to the .mo file to parse
-- `parser::Symbol=:antlr`: Parser to use (:julia or :antlr)
-- `u0`: Initial conditions (default: [])
-- `kwargs...`: Additional keyword arguments passed to ODEProblem
+- `filename::String`: Path to the .mo file to parse.
+- `parser::Symbol`: Parser to use. Options are `:antlr` and `:julia`.
+- `u0`: Initial conditions.
+- `kwargs...`: Additional keyword arguments passed to `ODEProblem`.
 
 ## Returns
-- A tuple `(prob, sys)` where `prob` is the ODEProblem and `sys` is the System
+- An `ODEProblem` constructed from the parsed model.
 
 ## Example
 ```julia
 using BaseModelica
 
-prob, sys = create_odeproblem("testfiles/Experiment.bmo")
+prob = create_odeproblem("testfiles/Experiment.bmo")
 # The tspan and tolerances are automatically set from the annotation
 ```
 """
