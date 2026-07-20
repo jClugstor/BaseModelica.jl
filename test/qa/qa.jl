@@ -3,7 +3,6 @@ using JET
 
 run_qa(
     BaseModelica;
-    explicit_imports = true,
     # MLStyle's @match expands to ambiguous-looking method tables; the original QA
     # ran ambiguities non-recursively, so keep that.
     #
