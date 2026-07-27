@@ -355,7 +355,7 @@ function eval_AST(when_eq::BaseModelicaWhenEquation)
             eq_obj = eval_when_equation(eq)
             if !isnothing(eq_obj) && isa(eq_obj, Equation)
                 push!(affects, eq_obj)
-                lhs_name = ModelingToolkit.getname(eq_obj.lhs)
+                lhs_name = SymbolicIndexingInterface.getname(eq_obj.lhs)
                 if lhs_name in discrete_variable_names
                     push!(discrete_params_for_cb, eq_obj.lhs)
                 end
@@ -367,7 +367,7 @@ function eval_AST(when_eq::BaseModelicaWhenEquation)
             # sample(startTime, interval) → PeriodicCallback with the given period
             interval = Float64(eval_AST(sample_args[2]))
             push!(
-                callbacks, ModelingToolkit.SymbolicDiscreteCallback(
+                callbacks, ModelingToolkitBase.SymbolicDiscreteCallback(
                     interval, affects;
                     discrete_parameters = discrete_params_for_cb
                 )
@@ -382,7 +382,7 @@ function eval_AST(when_eq::BaseModelicaWhenEquation)
             # (crossing is a Union including a vector case) for which
             # SymbolicContinuousCallback has no matching method.
             push!(
-                callbacks, ModelingToolkit.SymbolicContinuousCallback(
+                callbacks, ModelingToolkitBase.SymbolicContinuousCallback(
                     Equation[crossing ~ 0], affects;
                     affect_neg = nothing,
                     discrete_parameters = discrete_params_for_cb
@@ -526,7 +526,7 @@ function eval_AST(model::BaseModelicaModel)
                     comp.component_list[1].declaration.modification, "start"
                 )
                 default_val = !isnothing(start_val) ? start_val : false
-                disc_sym = ModelingToolkit.setdefault(disc_sym, default_val)
+                disc_sym = ModelingToolkitBase.setdefault(disc_sym, default_val)
                 variable_map[name] = disc_sym
                 # Don't push to vars — discrete parameters appear in all_pars
             else
@@ -559,7 +559,7 @@ function eval_AST(model::BaseModelicaModel)
                 # start value is an initial guess, not a default
                 start_value = get_class_modification_value(declaration.modification, "start")
                 if !isnothing(start_value)
-                    variable_map[name] = ModelingToolkit.setguess(variable_map[name], start_value)
+                    variable_map[name] = ModelingToolkitBase.setguess(variable_map[name], start_value)
                 end
             else
                 # Collect into parameter_val_map; setdefault is applied in pass 3 below.
@@ -588,18 +588,18 @@ function eval_AST(model::BaseModelicaModel)
                 is_fixed = !isnothing(fixed_value) &&
                     (fixed_value === true || fixed_value == true)
                 if is_fixed
-                    variable_map[name] = ModelingToolkit.setdefault(var, start_value)
+                    variable_map[name] = ModelingToolkitBase.setdefault(var, start_value)
                 else
-                    variable_map[name] = ModelingToolkit.setguess(var, start_value)
+                    variable_map[name] = ModelingToolkitBase.setguess(var, start_value)
                 end
             else
                 # No explicit start: set a default guess of 0.0 so that all variables
                 # have numeric guesses. Without this, MTK's initialization problem can
                 # end up with symbolic (cyclic) guesses when missing_guess_value is not
                 # forwarded through SCCNonlinearProblem → NonlinearProblem.
-                variable_map[name] = ModelingToolkit.setguess(var, 0.0)
+                variable_map[name] = ModelingToolkitBase.setguess(var, 0.0)
             end
-            idx = findfirst(v -> ModelingToolkit.getname(v) == name, vars)
+            idx = findfirst(v -> SymbolicIndexingInterface.getname(v) == name, vars)
             !isnothing(idx) && (vars[idx] = variable_map[name])
 
             # stateSelect attribute: StateSelect.never/avoid/default/prefer/always → Int 1–5
@@ -638,7 +638,7 @@ function eval_AST(model::BaseModelicaModel)
         sym = variable_map[name]
         val = get(parameter_val_map, sym, nothing)
         if !isnothing(val)
-            variable_map[name] = ModelingToolkit.setdefault(sym, val)
+            variable_map[name] = ModelingToolkitBase.setdefault(sym, val)
         end
     end
 
@@ -711,7 +711,7 @@ function eval_AST(model::BaseModelicaModel)
                     if has_free_params
                         push!(initialization_eqs, sym ~ value)
                     else
-                        new_sym = ModelingToolkit.setdefault(sym, value)
+                        new_sym = ModelingToolkitBase.setdefault(sym, value)
                         variable_map[name] = new_sym
                         idx = findfirst(v -> isequal(v, sym), vars)
                         !isnothing(idx) && (vars[idx] = new_sym)
@@ -731,8 +731,8 @@ function eval_AST(model::BaseModelicaModel)
         name = Symbol(param_eq.component_reference.ref_list[1].name)
         var = variable_map[name]
         value = eval_AST(param_eq.expression)
-        variable_map[name] = ModelingToolkit.setguess(var, value)
-        idx = findfirst(v -> ModelingToolkit.getname(v) == name, vars)
+        variable_map[name] = ModelingToolkitBase.setguess(var, value)
+        idx = findfirst(v -> SymbolicIndexingInterface.getname(v) == name, vars)
         !isnothing(idx) && (vars[idx] = variable_map[name])
     end
 
@@ -744,11 +744,11 @@ function eval_AST(model::BaseModelicaModel)
     #   s goes negative→positive: off becomes false (affect_neg, diode starts conducting)
     # The sanitized name (dots → underscores) avoids an MTK codegen bug where
     # dotted parameter names produce invalid Julia like `Ideal.offₜ₋₁`.
-    bool_crossing_callbacks = ModelingToolkit.SymbolicContinuousCallback[]
+    bool_crossing_callbacks = ModelingToolkitBase.SymbolicContinuousCallback[]
     filtered_eqs = Equation[]
     for eq in eqs
         lhs_name = try
-            ModelingToolkit.getname(eq.lhs)
+            SymbolicIndexingInterface.getname(eq.lhs)
         catch
             nothing
         end
@@ -770,7 +770,7 @@ function eval_AST(model::BaseModelicaModel)
                     (m, o, ctx, integ) -> (; off = false);
                     modified = (; off = off_sym)
                 )
-                cb = ModelingToolkit.SymbolicContinuousCallback(
+                cb = ModelingToolkitBase.SymbolicContinuousCallback(
                     Equation[crossing ~ 0],
                     affect;
                     affect_neg = affect_neg,
@@ -780,14 +780,14 @@ function eval_AST(model::BaseModelicaModel)
             else
                 # Not a comparison expression — treat as a constant Bool assignment.
                 concrete_val = try
-                    b = ModelingToolkitBase.Symbolics.value(eq.rhs)
+                    b = Symbolics.value(eq.rhs)
                     b isa Bool ? b : nothing
                 catch
                     nothing
                 end
                 if !isnothing(concrete_val)
                     variable_map[lhs_name] =
-                        ModelingToolkit.setdefault(off_sym, concrete_val)
+                        ModelingToolkitBase.setdefault(off_sym, concrete_val)
                 end
                 # Either way, don't add to filtered_eqs: `off` is a discrete parameter.
             end
@@ -812,8 +812,8 @@ function eval_AST(model::BaseModelicaModel)
     bindings = [variable_map[name] => missing for name in free_parameter_names]
 
     # Split when-callbacks by type: sample()/periodic → discrete, zero-crossing → continuous.
-    when_continuous = filter(cb -> cb isa ModelingToolkit.SymbolicContinuousCallback, when_callbacks)
-    when_discrete = filter(cb -> cb isa ModelingToolkit.SymbolicDiscreteCallback, when_callbacks)
+    when_continuous = filter(cb -> cb isa ModelingToolkitBase.SymbolicContinuousCallback, when_callbacks)
+    when_discrete = filter(cb -> cb isa ModelingToolkitBase.SymbolicDiscreteCallback, when_callbacks)
     all_continuous_events = vcat(when_continuous, bool_crossing_callbacks)
     @named sys = System(
         real_eqs, t, vars, all_pars;

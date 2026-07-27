@@ -13,9 +13,9 @@ makedocs(
     modules = [BaseModelica],
     sitename = "BaseModelica.jl",
     clean = true,
-    doctest = false,
+    doctest = true,
+    checkdocs = :exports,
     linkcheck = true,
-    warnonly = [:docs_block, :missing_docs],
     format = Documenter.HTML(
         assets = ["assets/favicon.ico"],
         canonical = "https://docs.sciml.ai/BaseModelica/stable/"

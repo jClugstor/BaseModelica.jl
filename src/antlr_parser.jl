@@ -21,8 +21,6 @@ This function is exported mainly for pre-loading or troubleshooting.
 
 # Example
 ```julia
-using BaseModelica
-
 # Option 1: Lazy initialization (recommended)
 parse_file_antlr("model.bmo")  # Initializes automatically
 
@@ -181,7 +179,7 @@ end
 
 # Helper function to check if a context is nothing/null
 function is_null(ctx::Py)
-    return pyconvert(Bool, ctx == pybuiltins.None)
+    return pyconvert(Bool, ctx == Py(nothing))
 end
 
 # Root rule visitor
@@ -339,10 +337,10 @@ function visit_composition(visitor::ASTBuilderVisitor, ctx::Py)
     annotation_ctx = ctx.annotationComment()
     if !is_null(annotation_ctx)
         # Handle both single and list cases
-        if pyconvert(Bool, pybuiltins.hasattr(annotation_ctx, "__iter__"))
+        if pyhasattr(annotation_ctx, "__iter__")
             # Multiple annotations - take the last one
-            if pyconvert(Int, pybuiltins.len(annotation_ctx)) > 0
-                annotation = visit_annotationComment(visitor, annotation_ctx[pyconvert(Int, pybuiltins.len(annotation_ctx)) - 1])
+            if pylen(annotation_ctx) > 0
+                annotation = visit_annotationComment(visitor, annotation_ctx[pylen(annotation_ctx) - 1])
             end
         else
             # Single annotation
@@ -471,7 +469,7 @@ function visit_modification(visitor::ASTBuilderVisitor, ctx::Py)
     expr_list = []
     expr_ctxs = ctx.expression()
     if !is_null(expr_ctxs)
-        if pyconvert(Bool, pybuiltins.hasattr(expr_ctxs, "__iter__"))
+        if pyhasattr(expr_ctxs, "__iter__")
             # It's a list
             for expr_ctx in expr_ctxs
                 push!(expr_list, visit_expression(visitor, expr_ctx))
@@ -570,7 +568,7 @@ end
 function visit_prioritizeExpression(visitor::ASTBuilderVisitor, ctx::Py)
     # For now, just return the expression part
     expr_ctxs = ctx.expression()
-    if pyconvert(Bool, pybuiltins.hasattr(expr_ctxs, "__iter__"))
+    if pyhasattr(expr_ctxs, "__iter__")
         return visit_expression(visitor, expr_ctxs[0])
     else
         return visit_expression(visitor, expr_ctxs)
@@ -596,7 +594,7 @@ function visit_equation(visitor::ASTBuilderVisitor, ctx::Py)
         expr_ctxs = ctx.expression()
         if !is_null(expr_ctxs)
             # Get the first expression after '='
-            first_expr = pyconvert(Bool, pybuiltins.hasattr(expr_ctxs, "__iter__")) ? expr_ctxs[0] : expr_ctxs
+            first_expr = pyhasattr(expr_ctxs, "__iter__") ? expr_ctxs[0] : expr_ctxs
             rhs = visit_expression(visitor, first_expr)
 
             comment_text = visit_comment(visitor, ctx.comment())
@@ -782,7 +780,7 @@ function visit_ifExpression(visitor::ASTBuilderVisitor, ctx::Py)
     expressions = []
 
     expr_ctxs = ctx.expressionNoDecoration()
-    num_exprs = pyconvert(Int, pybuiltins.len(expr_ctxs))
+    num_exprs = pylen(expr_ctxs)
 
     # Process pairs: condition, then-expression
 

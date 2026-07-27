@@ -1,10 +1,23 @@
 module BaseModelica
 
-using ModelingToolkit
-using ParserCombinator
-using MLStyle
-using CondaPkg
-using PythonCall
+import CondaPkg
+using DiffEqBase: BrownFullBasicInit
+using MLStyle: @data, @match
+import ModelingToolkit
+using ModelingToolkitBase: @discretes, @named, @parameters, System, equations, mtkcompile
+import ModelingToolkitBase
+using ParserCombinator:
+    @E_str, @e_str, @p_str, @with_names, Debug, Delayed, Drop, Lookahead, NoCache, Not, Plus,
+    Space, Star, make, once
+import ParserCombinator
+const set_name = ParserCombinator.set_name
+using PythonCall: Py, pyconvert, pyhasattr, pyimport, pylen
+using SciMLBase: ODEProblem
+import SymbolicIndexingInterface
+using SymbolicUtils: substitute
+import SymbolicUtils
+using Symbolics: @variables, Equation, Num
+import Symbolics
 
 include("ast.jl")
 include("julia_parser.jl")
@@ -12,28 +25,37 @@ include("antlr_parser.jl")
 include("evaluator.jl")
 
 """
-    parse_basemodelica(filename::String; parser::Symbol = :antlr)::System
+    parse_basemodelica(filename::AbstractString; parser::Symbol = :antlr)
 
-Parses a BaseModelica .mo file into a ModelingToolkit System.
+Parse a BaseModelica source file into a compiled ModelingToolkit system.
 
 ## Arguments
-- `filename::String`: Path to the .mo file to parse.
-- `parser::Symbol`: Parser to use. Options:
-  - `:antlr` - ANTLR parser (default)
-  - `:julia` - ParserCombinator parser
+- `filename::AbstractString`: Path to a BaseModelica source file.
+
+## Keyword Arguments
+- `parser::Symbol = :antlr`: Parsing backend. `:antlr` uses the bundled ANTLR grammar;
+  `:julia` uses the ParserCombinator implementation.
 
 ## Returns
-- A `ModelingToolkit.System` generated from the parsed BaseModelica model.
+- A compiled `ModelingToolkitBase.System` representing the equations, variables, parameters,
+  and events in `filename`.
 
-## Example
+## Errors
+- Throws an error when `parser` is neither `:antlr` nor `:julia`, or when the selected parser
+  cannot parse `filename`.
+
+## Examples
 
 ```julia
-parse_basemodelica("testfiles/NewtonCoolingBase.bmo")
-parse_basemodelica("testfiles/NewtonCoolingBase.bmo", parser=:antlr)
-parse_basemodelica("testfiles/NewtonCoolingBase.bmo"; parser = :julia)
+using BaseModelica
+
+filename = joinpath(pkgdir(BaseModelica), "test", "testfiles", "NewtonCoolingBase.bmo")
+system = parse_basemodelica(filename)
+@assert !isnothing(system)
 ```
 """
-function parse_basemodelica(filename::String; parser::Symbol = :antlr)
+function parse_basemodelica(filename::AbstractString; parser::Symbol = :antlr)
+    filename = String(filename)
     package = if parser == :antlr
         parse_file_antlr(filename)
     elseif parser == :julia
@@ -47,19 +69,31 @@ end
 """
     parse_experiment_annotation(annotation::Union{BaseModelicaAnnotation, Nothing})
 
-Extract simulation settings from a BaseModelica experiment annotation.
+Extract simulation settings from a parsed BaseModelica experiment annotation.
+
+This is a developer-level API for code that already owns a BaseModelica AST. It does not parse
+BaseModelica text and the AST representation is not a supported extension interface for ordinary
+package users. Use [`create_odeproblem`](@ref) to apply experiment settings while importing a
+model.
 
 ## Arguments
-- `annotation`: A parsed BaseModelica annotation, or `nothing`.
+- `annotation::Union{BaseModelicaAnnotation, Nothing}`: A parsed AST annotation. Pass `nothing`
+  when the imported model has no annotation.
 
 ## Returns
-- `nothing` when no experiment annotation is provided.
-- A named tuple with `StartTime`, `StopTime`, `Tolerance`, and `Interval` when settings are available.
+- `nothing` when no experiment annotation is present or the annotation has no experiment block.
+- A named tuple with `StartTime`, `StopTime`, `Tolerance`, and `Interval` otherwise. Missing
+  fields use the Modelica defaults `0.0`, `1.0`, and `1e-4`; `Interval` remains `nothing` when
+  unspecified.
 
-## Example
+## Examples
+
 ```julia
-annotation = BaseModelicaAnnotation("annotation(experiment(StartTime = 0, StopTime = 2.0, Tolerance = 1e-06, Interval = 0.004))")
-params = parse_experiment_annotation(annotation)
+using BaseModelica
+
+parse_experiment_annotation(nothing)
+# output
+nothing
 ```
 """
 function parse_experiment_annotation(annotation::Union{BaseModelicaAnnotation, Nothing})
@@ -130,29 +164,43 @@ function parse_experiment_annotation(annotation::Union{BaseModelicaAnnotation, N
 end
 
 """
-    create_odeproblem(filename::String; parser::Symbol=:antlr, u0=[], kwargs...)
+    create_odeproblem(filename::AbstractString; parser::Symbol = :antlr, u0 = [], kwargs...)
 
-Parse a BaseModelica file and create an ODEProblem with experiment settings from annotations.
-If an experiment annotation is present, StartTime, StopTime, and Tolerance are automatically applied.
+Parse a BaseModelica source file and create an ODE problem with experiment settings.
+
+If the model has an `annotation(experiment(...))` block, its `StartTime` and `StopTime` become
+the problem time span, `Tolerance` becomes `reltol`, and `Interval` becomes `saveat`. Explicit
+keyword arguments override those annotation-derived defaults.
 
 ## Arguments
-- `filename::String`: Path to the .mo file to parse.
-- `parser::Symbol`: Parser to use. Options are `:antlr` and `:julia`.
-- `u0`: Initial conditions.
-- `kwargs...`: Additional keyword arguments passed to `ODEProblem`.
+- `filename::AbstractString`: Path to a BaseModelica source file.
+- `u0`: Initial conditions forwarded to `SciMLBase.ODEProblem`.
+
+## Keyword Arguments
+- `parser::Symbol = :antlr`: Parsing backend, either `:antlr` or `:julia`.
+- `kwargs...`: Keyword arguments forwarded to `SciMLBase.ODEProblem`. `reltol` and `saveat`
+  override values read from an experiment annotation.
 
 ## Returns
-- An `ODEProblem` constructed from the parsed model.
+- A `SciMLBase.ODEProblem` constructed from the imported ModelingToolkit system.
 
-## Example
+## Errors
+- Throws an error when the parser cannot read `filename` or an unsupported parser is requested.
+
+## Examples
+
 ```julia
 using BaseModelica
 
-prob = create_odeproblem("testfiles/Experiment.bmo")
-# The tspan and tolerances are automatically set from the annotation
+filename = joinpath(pkgdir(BaseModelica), "test", "testfiles", "Experiment.bmo")
+prob = create_odeproblem(filename)
+prob.tspan
+# output
+(0.0, 2.0)
 ```
 """
-function create_odeproblem(filename::String; parser::Symbol = :antlr, u0 = [], kwargs...)
+function create_odeproblem(filename::AbstractString; parser::Symbol = :antlr, u0 = [], kwargs...)
+    filename = String(filename)
     # Parse the file to get the package
     package = if parser == :antlr
         parse_file_antlr(filename)
