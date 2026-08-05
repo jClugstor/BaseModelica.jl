@@ -1,7 +1,7 @@
 authors = ["jClugstor <jadonclugston@gmail.com> and contributors"]
 name = "BaseModelica"
 uuid = "a17d5099-185d-4ff5-b5d3-51aa4569e56d"
-version = "1.9.2"
+version = "1.9.3"
 
 [compat]
 Aqua = "0.8"
@@ -17,7 +17,7 @@ PythonCall = "0.9.29"
 SciMLBase = "2, 3"
 SymbolicIndexingInterface = "0.3"
 SymbolicUtils = "3, 4"
-Symbolics = "5, 6, 7"
+Symbolics = "7.35"
 SafeTestsets = "0.1, 1"
 SciMLTesting = "2.4"
 Test = "1.10"
