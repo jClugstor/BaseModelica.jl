@@ -9,10 +9,43 @@
 [![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor%27s%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
 [![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
 
-A parser for the [Base Modelica](https://github.com/modelica/ModelicaSpecification/tree/MCP/0031/RationaleMCP/0031) format. Contains utilities to parse Base Modelica model files in to Julia objects, and to convert Base Modelica models to [ModelingToolkit](https://docs.sciml.ai/ModelingToolkit/stable/) models.
+A parser for the [Base Modelica](https://github.com/modelica/ModelicaSpecification/tree/MCP/0031/RationaleMCP/0031) format. Contains utilities to parse Base Modelica model files into Julia objects, and to convert Base Modelica models to [ModelingToolkit](https://docs.sciml.ai/ModelingToolkit/stable/) systems ready for simulation.
 
-Base Modelica is as of yet only a proposal with no concrete specification, so the grammar and features of the language are subject to change.
-There is no support for Records, custom types, or custom functions. Any [built in BaseModelica functions](https://github.com/modelica/ModelicaSpecification/blob/MCP/0031/RationaleMCP/0031/functions.md) are not yet supported. Array variables and accessing elements of an array are not yet supported. Only models with real scalar parameters, real scalar variables, and equations consisting of simple arithmetic equations and first order derivatives are able to be translated to an MTK model at this time.
+Base Modelica is still a proposal (MCP-0031) without a finalized specification, so the grammar and features of the language are subject to change.
+
+## Features
+
+### Parsing backends
+
+Two parser backends are available:
+
+  - `:antlr` (default): uses the official Base Modelica ANTLR grammar via a bundled Python parser. The Python dependencies are managed automatically through CondaPkg, so no manual setup is required.
+  - `:julia`: a pure-Julia parser built on ParserCombinator.jl.
+
+Select a backend with the `parser` keyword argument, e.g. `parse_basemodelica("model.bmo", parser = :julia)`.
+
+### Supported language features
+
+  - `Real`, `Integer`, `Boolean`, and `String` parameters and variables
+  - Equations with first-order derivatives (`der`), initial equations, and declaration equations
+  - Parameter and variable modifiers such as `start`, `fixed`, `min`, `max`, and `unit`. Start values with `fixed = true` become initial conditions, `fixed = false` becomes guesses, and free parameters (`fixed = false`) are solved during initialization
+  - If-equations and inline if-expressions, including `elseif` chains, nesting, and Boolean variable conditions
+  - When-equations, translated to ModelingToolkit continuous and discrete events, including discrete variables
+  - Boolean expressions and relational operators
+  - Built-in Modelica functions:
+      + Elementary math: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `exp`, `log`, `log10`
+      + Numeric: `abs`, `sign`, `sqrt`, `min`, `max`
+      + Event-triggering: `div`, `mod`, `rem`, `ceil`, `floor`, `integer`
+      + Special operators: `semiLinear`, `homotopy`
+      + Event-related: `noEvent`, `smooth`
+      + `assert` and `terminate` (assert statements are parsed and skipped during translation)
+  - `annotation(experiment(...))` blocks for automatic simulation setup (see below)
+
+This is sufficient to import nontrivial models — the test suite includes Base Modelica flattenings of Modelica Standard Library examples such as the Cauer low-pass filters, the Chua circuit, ideal diode circuits, op-amp circuits, and a triac circuit.
+
+### Not yet supported
+
+Records, custom types, custom functions, arrays and array indexing, and functions with tuple returns are not yet supported.
 
 ## Installation
 
@@ -24,9 +57,9 @@ import Pkg;
 Pkg.add("BaseModelica");
 ```
 
-# Example
+## Example
 
-A Base Modelica model is in the file `ExampleFirstOrder.mo`. Inside of the file is a Base Modelica model specifying a simple first order linear differential equation:
+Suppose the file `ExampleFirstOrder.bmo` contains a Base Modelica model specifying a simple first-order linear differential equation:
 
 ```
 package 'FirstOrder'
@@ -36,35 +69,39 @@ package 'FirstOrder'
   initial equation
     'x' = 'x0' "Set initial value of 'x' to 'x0'";
   equation
-    der('x') = 1.0 - 'x'; 
+    der('x') = 1.0 - 'x';
   end 'FirstOrder';
 end 'FirstOrder';
 ```
 
-To parse the model in the file to ModelingToolkit, use the `parse_basemodelica` function:
+To parse the model into a compiled ModelingToolkit `System`, use the `parse_basemodelica` function:
 
-```julia
 ```julia
 using BaseModelica
 
 sys = parse_basemodelica("path/to/ExampleFirstOrder.bmo")
 ```
 
-To automatically create an ODEProblem ready for simulation, use `create_odeproblem`:
+To go straight to an `ODEProblem` ready for simulation, use `create_odeproblem`:
 
 ```julia
-using BaseModelica, DifferentialEquations
+using BaseModelica, OrdinaryDiffEq
 
-# Automatically sets tspan, reltol, and saveat from annotation if present
 prob = create_odeproblem("path/to/ExampleFirstOrder.bmo")
 
-# Solve and plot
 sol = solve(prob)
 ```
 
+### Experiment annotations
+
 If the model contains an experiment annotation like:
+
 ```modelica
 annotation(experiment(StartTime = 0, StopTime = 2.0, Tolerance = 1e-06, Interval = 0.004))
 ```
 
-The time span, relative tolerance, and save interval will be automatically configured from the annotation.
+then `create_odeproblem` automatically sets the time span from `StartTime`/`StopTime`, `reltol` from `Tolerance`, and `saveat` from `Interval`. Keyword arguments passed to `create_odeproblem` override the annotation values:
+
+```julia
+prob = create_odeproblem("path/to/model.bmo", reltol = 1e-8, saveat = 0.01)
+```
